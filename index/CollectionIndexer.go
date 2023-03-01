@@ -11,7 +11,7 @@ type CollectionIndexerImpl struct {
 	IdIndex  map[string]uint64
 }
 
-func (ci CollectionIndexerImpl) SetFreePos(cn string, size uint32, pos int64) {
+func (ci *CollectionIndexerImpl) SetFreePos(cn string, size uint32, pos int64) {
 	name := fmt.Sprintf("%s%d", cn, size)
 	q, ok := ci.DelIndex[name]
 	if !ok {
@@ -23,13 +23,14 @@ func (ci CollectionIndexerImpl) SetFreePos(cn string, size uint32, pos int64) {
 	}
 }
 
-func (ci CollectionIndexerImpl) GenerateNextId(cn string) uint64 {
+func (ci *CollectionIndexerImpl) GenerateNextId(cn string) uint64 {
 	currId := ci.IdIndex[cn]
-	ci.IdIndex[cn] += 1
+	currId += 1
+	ci.IdIndex[cn] = currId
 	return currId
 }
 
-func (ci CollectionIndexerImpl) SetPosForId(cn string, id uint64, pos int64) {
+func (ci *CollectionIndexerImpl) SetPosForId(cn string, id uint64, pos int64) {
 	collIndex, ok := ci.Index[cn]
 	if !ok {
 		collIndex = map[uint64]int64{}
@@ -40,7 +41,7 @@ func (ci CollectionIndexerImpl) SetPosForId(cn string, id uint64, pos int64) {
 	}
 }
 
-func (ci CollectionIndexerImpl) GetPosById(cn string, id uint64) (int64, bool) {
+func (ci *CollectionIndexerImpl) GetPosById(cn string, id uint64) (int64, bool) {
 	cm, ok := ci.Index[cn]
 	if !ok {
 		return 0, false
@@ -54,7 +55,7 @@ func (ci CollectionIndexerImpl) GetPosById(cn string, id uint64) (int64, bool) {
 	return pos, true
 }
 
-func (ci CollectionIndexerImpl) GetFreePos(cn string, size uint32) (int64, bool) {
+func (ci *CollectionIndexerImpl) GetFreePos(cn string, size uint32) (int64, bool) {
 	/*
 		TODO create check free pos function & think about solving problem with different cluster sizes & q
 	*/

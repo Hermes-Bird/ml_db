@@ -81,17 +81,13 @@ func GetHeaderData(h []byte) (uint64, uint32, uint32) {
 func MakeHeader(id uint64, data []byte) ([]byte, uint32) {
 	hBs := make([]byte, 16)
 
-	var idBs []byte
-	binary.BigEndian.PutUint64(idBs, id)
-	for i := range idBs {
-		hBs[i] = idBs[i]
-	}
+	binary.BigEndian.PutUint64(hBs, id)
 
 	size := uint32(len(data))
 	cSize := consts.GetClusterSize(size)
 
-	var sizeBs []byte
-	var cSizeBs []byte
+	sizeBs := make([]byte, 4)
+	cSizeBs := make([]byte, 4)
 
 	binary.BigEndian.PutUint32(sizeBs, size)
 	binary.BigEndian.PutUint32(cSizeBs, cSize)

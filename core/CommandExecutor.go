@@ -4,7 +4,7 @@ import (
 	"encoding/binary"
 	"github.com/Hermes-Bird/ml_db/core/consts"
 	"github.com/Hermes-Bird/ml_db/core/db_operations"
-	"github.com/Hermes-Bird/ml_db/files"
+	"github.com/Hermes-Bird/ml_db/core/tx"
 	"github.com/Hermes-Bird/ml_db/index"
 	"github.com/Hermes-Bird/ml_db/json_handler"
 	"github.com/martingallagher/go-jsonmp"
@@ -14,17 +14,20 @@ import (
 
 type CommandExecutor struct {
 	Op  *db_operations.DbOperator
-	Fk  files.FileKeeper
 	Ind index.CollectionIndexer
 }
 
-func (c CommandExecutor) Search(cn string, data []byte) ([][]byte, error) {
-	// TODO check for index & implement search with indexed field
-
-	f, err := c.Fk.GetFileByCollection(cn)
-	if err != nil {
-		return nil, err
+func NewCommandExecutor() *CommandExecutor {
+	return &CommandExecutor{
+		Op:  &db_operations.DbOperator{},
+		Ind: index.NewCollectionIndexer(),
 	}
+}
+
+func (c CommandExecutor) Search(op tx.Operation) ([][]byte, error) {
+	// TODO check for index & implement search with indexed field
+	data := op.Condition
+	f := op.File
 
 	r := db_operations.NewDbReader(f)
 	match := json_handler.NewComparator(data)
@@ -35,7 +38,7 @@ func (c CommandExecutor) Search(cn string, data []byte) ([][]byte, error) {
 			log.Println("Search error", err)
 		}
 
-		curD := cur[16:]
+		curD := cur[consts.HEADER_SIZE:]
 		if match.Matches(curD) {
 			res = append(res, curD)
 		}
@@ -44,11 +47,11 @@ func (c CommandExecutor) Search(cn string, data []byte) ([][]byte, error) {
 	return res, nil
 }
 
-func (c CommandExecutor) Insert(cn string, data [][]byte) (int, error) {
-	f, err := c.Fk.GetFileByCollection(cn)
-	if err != nil {
-		return 0, err
-	}
+func (c CommandExecutor) Insert(op tx.Operation) (int, error) {
+	cn := op.Collection
+	data := append([][]byte{}, op.Data)
+	f := op.File
+
 	// TODO handle case with datasize more then config.LSize
 
 	n := 0
@@ -67,11 +70,11 @@ func (c CommandExecutor) Insert(cn string, data [][]byte) (int, error) {
 	return n, nil
 }
 
-func (c CommandExecutor) Update(cn string, strat uint8, cond []byte, data []byte) (int, error) {
-	f, err := c.Fk.GetFileByCollection(cn)
-	if err != nil {
-		return 0, err
-	}
+func (c CommandExecutor) Update(op tx.Operation) (int, error) {
+	cn := op.Collection
+	cond := op.Condition
+	data := op.Data
+	f := op.File
 
 	// TODO index shit... again
 
@@ -91,15 +94,19 @@ func (c CommandExecutor) Update(cn string, strat uint8, cond []byte, data []byte
 	}
 
 	count := 0
+	var err error
+
 	for pos, d := range dataSet {
 		var res []byte
-		switch strat {
-		case consts.STRAT_PATCH:
+		switch op.Command {
+		case "PATCH":
 			res, err = jsonmp.Patch(d[consts.HEADER_SIZE:], data)
 			if err != nil {
 				log.Println("Error while patching data", err)
 				continue
 			}
+		case "UPDATE":
+			res = data
 		}
 		id, cSize, _ := db_operations.GetHeaderData(d[consts.HEADER_SIZE:])
 		h, newCSize := db_operations.MakeHeader(id, res)
@@ -131,12 +138,10 @@ func (c CommandExecutor) Update(cn string, strat uint8, cond []byte, data []byte
 	return 0, nil
 }
 
-func (c CommandExecutor) Delete(cn string, data []byte) (int, error) {
-	f, err := c.Fk.GetFileByCollection(cn)
-	if err != nil {
-		return 0, err
-	}
-	// TODO indexed shit optimizations
+func (c CommandExecutor) Delete(op tx.Operation) (int, error) {
+	cn := op.Collection
+	data := op.Data
+	f := op.File
 
 	count := 0
 	m := json_handler.NewComparator(data)

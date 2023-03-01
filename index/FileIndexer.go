@@ -6,7 +6,7 @@ type FileIndexerImpl struct {
 	Fp map[string]string
 }
 
-func NewFileIndexer() *FileIndexerImpl {
+func NewFileIndexer() FileIndexer {
 	return &FileIndexerImpl{
 		Fp: map[string]string{},
 	}

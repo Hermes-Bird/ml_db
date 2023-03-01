@@ -1,6 +1,8 @@
 package files
 
 import (
+	"fmt"
+	"log"
 	"os"
 	"sync"
 	"time"
@@ -13,14 +15,31 @@ type FileKeeperImp struct {
 	FileStore           map[string]*os.File
 }
 
-func (fk *FileKeeperImp) GetFileByCollection(filename string, size int) (*os.File, *sync.WaitGroup, error) {
+func NewFileKeeperImpl() FileKeeper {
+	return &FileKeeperImp{
+		M:                   sync.Mutex{},
+		FileWgStore:         map[string]*sync.WaitGroup{},
+		FileCancelChanStore: map[string]chan struct{}{},
+		FileStore:           map[string]*os.File{},
+	}
+}
+
+func (fk *FileKeeperImp) GetFilename(cn string) string {
+	return fmt.Sprintf("%s.mldf", cn)
+}
+
+func (fk *FileKeeperImp) GetFileByCollection(collection string) (*os.File, error) {
+	log.Println("Mutex file before lock")
 	fk.M.Lock()
+
+	filename := fk.GetFilename(collection)
 
 	f, ok := fk.FileStore[filename]
 	if !ok {
-		file, err := os.OpenFile(filename, os.O_RDWR, 0666)
+		file, err := os.OpenFile(filename, os.O_RDWR|os.O_CREATE, 0755)
 		if err != nil {
-			return nil, nil, err
+			fk.M.Unlock()
+			return nil, err
 		}
 		fk.FileStore[filename] = file
 		f = file
@@ -44,13 +63,23 @@ func (fk *FileKeeperImp) GetFileByCollection(filename string, size int) (*os.Fil
 	}
 
 	fk.M.Unlock()
-
+	log.Println("Mutex file unlock")
 	select {
 	case c <- struct{}{}:
 	default:
 	}
 
-	return f, nil, nil
+	return f, nil
+}
+
+func (fk *FileKeeperImp) DoneCollectionTask(collectionName string) {
+	filename := fk.GetFilename(collectionName)
+	fk.M.Lock()
+	wg, ok := fk.FileWgStore[filename]
+	if ok {
+		wg.Done()
+	}
+	fk.M.Unlock()
 }
 
 func (fk *FileKeeperImp) FileKeep(filename string, wg *sync.WaitGroup, c chan struct{}) {
@@ -61,9 +90,11 @@ Loop:
 		t := time.NewTimer(time.Second * 15)
 		select {
 		case <-t.C:
+			fk.M.Lock()
 			f := fk.FileStore[filename]
 			f.Close()
 			delete(fk.FileStore, filename)
+			fk.M.Unlock()
 			break Loop
 		case <-c:
 		}

@@ -1,6 +1,7 @@
 package json_handler
 
 import (
+	"encoding/json"
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
 )
@@ -17,4 +18,12 @@ func GetJsonFromValue(v any, path string) []byte {
 
 func IsValidJson(j []byte) bool {
 	return gjson.ValidBytes(j)
+}
+
+func IsValidJsonString(j string) bool {
+	return IsValidJson([]byte(j))
+}
+
+func ToJsonBytes(d any) ([]byte, error) {
+	return json.Marshal(d)
 }
